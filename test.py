@@ -6,7 +6,7 @@ import statistics
 
 from datetime import datetime, timezone, timedelta
 
-tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW",
+tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW", "TIP":"TIP",
 "VTI": "VTI", "IWM":"IWM", "VGK":"VGK", "EWJ": "EWJ", "VWO":"VWO", "GSG":"GSG", "HYG":"HYG", "LQD":"LQD", "UST":"UST", "SHV":"SHV", "USBND": "VBMFX", "GLBBND":"PGBIX", "LTBND":"VUSTX",
            "IVM": "NAESX", "IEF": "VFITX", "SHY": "SHY", "BND": "BND", "AGG": "AGG", "VCIT": "VCIT", "VNQ": "VNQ", "GUNR": "GUNR", "O": "O", "RIO": "RIO", "NAVER": "035420", "SAMSUNG": "005930"}
 database = "test.db"
@@ -242,8 +242,8 @@ if __name__ == "__main__":
 
     # RAA
     canary_asset = "KOSPI"
-    portfolio = ["SPY", "IEF", "GLD", "QQQ"]
-    def_asset = "SHV"
+    portfolio = ["QQQ", "SPY", "TLT", "GLD", "DBC", "BTC", "TIP"]
+    def_asset = "IEF"
     ref_asset = "M2"
     years = 3
     ref_date = (local_datetime.date()-timedelta(weeks=52*years))
