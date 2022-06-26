@@ -6,8 +6,9 @@ import statistics
 
 from datetime import datetime, timezone, timedelta
 
-tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW", "TIP":"TIP",
-"VTI": "VTI", "IWM":"IWM", "VGK":"VGK", "EWJ": "EWJ", "VWO":"VWO", "GSG":"GSG", "HYG":"HYG", "LQD":"LQD", "UST":"UST", "SHV":"SHV", "USBND": "VBMFX", "GLBBND":"PGBIX", "LTBND":"VUSTX",
+tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW", "TIP":"TIP", "IAU":"IAU", "MCHI":"MCHI", "XLF":"XLF",
+"VTI": "VTI", "IWM":"IWM", "VGK":"VGK", "EWJ": "EWJ", "VWO":"VWO", "GSG":"GSG", "HYG":"HYG", "LQD":"LQD", "UST":"UST", "SHV":"SHV", "USBND": "VBMFX", "GLBBND":"PGBIX", "LTBND":"VUSTX", "PSQ":"PSQ",
+"USDKRW": "USD/KRW", "ASHR": "ASHR", "DBA": "DBA", "SCHD": "SCHD", "TSLA": "TSLA", "XOM": "XOM",
            "IVM": "NAESX", "IEF": "VFITX", "SHY": "SHY", "BND": "BND", "AGG": "AGG", "VCIT": "VCIT", "VNQ": "VNQ", "GUNR": "GUNR", "O": "O", "RIO": "RIO", "NAVER": "035420", "SAMSUNG": "005930"}
 database = "test.db"
 
@@ -242,8 +243,8 @@ if __name__ == "__main__":
 
     # RAA
     canary_asset = "KOSPI"
-    portfolio = ["QQQ", "SPY", "TLT", "GLD", "DBC", "BTC", "TIP"]
-    def_asset = "IEF"
+    portfolio = ["QQQ", "SPY", "TLT", "IEF", "IAU", "GUNR", "DBA", "USDKRW", "BTC", "SCHD", "ASHR", "PSQ", "XOM"]
+    def_asset = "SHV"
     ref_asset = "M2"
     years = 3
     ref_date = (local_datetime.date()-timedelta(weeks=52*years))
