@@ -2,10 +2,11 @@ import FinanceDataReader as fdr
 import pandas as pd
 import sqlite3
 import pytz
+import statistics
 
 from datetime import datetime, timezone, timedelta
 
-tickers = {"KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW",
+tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW",
            "IVM": "NAESX", "IEF": "VFITX", "SHY": "SHY", "BND": "BND", "AGG": "AGG", "VCIT": "VCIT", "VNQ": "VNQ", "GUNR": "GUNR", "O": "O", "RIO": "RIO", "NAVER": "035420", "SAMSUNG": "005930"}
 database = "test.db"
 
@@ -27,7 +28,10 @@ def check_table(ticker):
     if table == None:
         if DEBUG_MODE:
             print(ticker + " table not exists")
-        data = fdr.DataReader(tickers[ticker])
+        if ticker == 'M2':
+            data = fdr.DataReader('M2', data_source='fred')
+        else:
+            data = fdr.DataReader(tickers[ticker])
         data.to_sql(ticker, con, if_exists="replace")
 
 
@@ -37,7 +41,10 @@ def retrieve_data(ticker):
     if row == None:
         if DEBUG_MODE:
             print(ticker + " table rows not exists")
-        data = fdr.DataReader(tickers[ticker])
+        if ticker == 'M2':
+            data = fdr.DataReader('M2', data_source='fred')
+        else:
+            data = fdr.DataReader(tickers[ticker])
         data.to_sql(ticker, con, if_exists="replace")
         cur.execute("SELECT Date FROM " + ticker +
                     " ORDER BY Date DESC LIMIT 1")
@@ -49,9 +56,13 @@ def retrieve_data(ticker):
         cur.execute("DELETE FROM " + ticker +
                     " WHERE Date >= date(?,'-0 days') ORDER BY Date DESC LIMIT 3", (lastdate,))
         con.commit()
-        data = fdr.DataReader(
-            tickers[ticker], lastdate, local_datetime.date())
-        data.to_sql(ticker, con, if_exists="append")
+        if ticker == 'M2':
+            data = fdr.DataReader('M2', data_source='fred')
+            data.to_sql(ticker, con, if_exists="replace")
+        else:
+            data = fdr.DataReader(
+                tickers[ticker], lastdate, local_datetime.date())
+            data.to_sql(ticker, con, if_exists="append")
         if DEBUG_MODE:
             print(ticker + " last Date = ", lastdate)
             cur.execute("SELECT Date FROM " + ticker +
@@ -69,7 +80,10 @@ def wma(ticker, ref_date):
     :param ref_date: datetime.date() of reference date
     :return: ticker, wma, lastdate, close_price
     """
-    cur.execute("SELECT Date, Close FROM " + ticker +
+    price = "Close"
+    if ticker == 'M2':
+        price = 'M2'
+    cur.execute("SELECT Date, " + price + " FROM " + ticker +
                 " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 241", (ref_date, ))
     rows = cur.fetchall()
     if DEBUG_MODE:
@@ -79,8 +93,10 @@ def wma(ticker, ref_date):
     for i in range(1, 13):
         m.append(rows[i*20][1])
     d = rows[0][0]
-    weighted_moving_average = (
-        (m[0]-m[1])*70+(m[0]-m[3])*15+(m[0]-m[6])*10+(m[0]-m[12])*5)*100/(100*m[0])
+    weighted_moving_average = 100*(
+        ((m[0]-m[1])*70+(m[0]-m[3])*15+(m[0]-m[6])*10+(m[0]-m[12])*5)/(100*m[0]))
+    # MOVING AVERAGE 1Y-1M for annual rebalancing
+    # ((m[0]-m[12])-(m[0]-m[1]))/m[0])
     wma = '{0:.3g}'.format(weighted_moving_average)
     if DEBUG_MODE:
         print(d.split(" ")[0], ticker + ":", m[0], "가중이평:", wma, "%")
@@ -102,10 +118,13 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
     portfolio_yield = 100
     ref_yield = 100
     prev_yield = portfolio_yield
+    yields = []
     prev_ref_yield = ref_yield
+    ref_yields = []
     prev_selected = []
     mdd = 0
     ref_mdd = 0
+    price = 'Close'
     while end_date < now:
         canary_wma = float(wma(canary_asset, end_date)[1])
         selected = []
@@ -122,25 +141,32 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             selected.append(key)
             # NUM OF HOLDING ASSETS
             if len(selected) >= len(portfolio)//2:
-            # if len(selected) == len(portfolio):
+                # if len(selected) == len(portfolio):
                 break
         # MONTHLY SEASONALITY NOV-MAY
-        if canary_wma > 0 and len(selected) >= 1 and (end_date.month > 10 or end_date.month < 6):
-        # if canary_wma > 0 and len(selected) >= 1:
+        # if canary_wma > 0 and len(selected) >= 1 and (end_date.month > 10 or end_date.month < 6):
+        if canary_wma > 0 and len(selected) >= 1:
+            yields.append(0)
             for ticker in selected:
-                cur.execute("SELECT Close FROM " + ticker +
+                if ticker == 'M2':
+                    price = 'M2'
+                cur.execute("SELECT " + price + " FROM " + ticker +
                             " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
                 start = float(cur.fetchone()[0])
                 end_date += timedelta(days=30)
-                cur.execute("SELECT Close FROM " + ticker +
+                cur.execute("SELECT " + price + " FROM " + ticker +
                             " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
                 end = float(cur.fetchone()[0])
+                price = 'Close'
                 end_date -= timedelta(days=30)
-                # FEE 0.2%
+                # FEE SELL/BUY 0.2%
                 if FEE_MODE and ticker not in prev_selected:
-                    portfolio_yield *= 1+((end-start)/start-0.004)/len(selected)
+                    portfolio_yield *= 1 + \
+                        ((end-start)/start-0.004)/len(selected)
+                    yields[-1] += 100*((end-start)/start-0.004)/len(selected)
                 else:
                     portfolio_yield *= 1+((end-start)/start)/len(selected)
+                    yields[-1] += 100*((end-start)/start)/len(selected)
             if DEBUG_MODE:
                 print(selected, end_date, "{:.2f}% {:.2f}%".format(
                     portfolio_yield, portfolio_yield-prev_yield))
@@ -152,17 +178,22 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
         else:
             if DEBUG_MODE:
                 print(wma(def_asset, end_date))
-            cur.execute("SELECT Close FROM " + def_asset +
+            if def_asset == 'M2':
+                price = 'M2'
+            cur.execute("SELECT " + price + " FROM " + def_asset +
                         " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
             start = float(cur.fetchone()[0])
             end_date += timedelta(days=30)
-            cur.execute("SELECT Close FROM " + def_asset +
+            cur.execute("SELECT " + price + " FROM " + def_asset +
                         " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
             end = float(cur.fetchone()[0])
+            price = 'Close'
             if FEE_MODE and prev_selected != [def_asset]:
                 portfolio_yield *= 1+(end-start)/start-0.004
+                yields.append(100*(1+(end-start)/start-0.004))
             else:
                 portfolio_yield *= 1+(end-start)/start
+                yields.append(100*(1+(end-start)/start))
             if DEBUG_MODE:
                 print([def_asset], end_date, start, end, "{:.2f}% {:.2f}% {:.2f}%".format(
                     100*(end-start)/start, portfolio_yield, portfolio_yield-prev_yield))
@@ -172,14 +203,18 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             prev_yield = portfolio_yield
 
         end_date -= timedelta(days=30)
-        cur.execute("SELECT Close FROM " + ref_asset +
+        if ref_asset == 'M2':
+            price = 'M2'
+        cur.execute("SELECT " + price + " FROM " + ref_asset +
                     " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
         start = float(cur.fetchone()[0])
         end_date += timedelta(days=30)
-        cur.execute("SELECT Close FROM " + ref_asset +
+        cur.execute("SELECT " + price + " FROM " + ref_asset +
                     " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
         end = float(cur.fetchone()[0])
+        price = 'Close'
         ref_yield *= (1+(end-start)/start)
+        ref_yields.append(100*(1+(end-start)/start))
         if DEBUG_MODE:
             print([ref_asset], end_date, start, end, "{:.2f}% {:.2f}% {:.2f}%".format(
                 100*(end-start)/start, ref_yield, ref_yield-prev_ref_yield))
@@ -187,7 +222,7 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             ref_mdd = ref_yield-prev_ref_yield
         prev_ref_yield = ref_yield
 
-    return portfolio_yield, mdd, ref_yield, ref_mdd
+    return portfolio_yield, mdd, statistics.stdev(yields), statistics.mean(yields), ref_yield, ref_mdd, statistics.stdev(ref_yields), statistics.mean(ref_yields)
 
 
 if __name__ == "__main__":
@@ -205,9 +240,9 @@ if __name__ == "__main__":
 
     # RAA
     canary_asset = "KOSPI"
-    portfolio = ["QQQ", "TLT", "DBC", "NAVER"]
-    def_asset = "TLT"
-    ref_asset = "SPY"
+    portfolio = ["QQQ", "TLT", "DBC", "GLD"]
+    def_asset = "IEF"
+    ref_asset = "M2"
     years = 7.6
     ref_date = (local_datetime.date()-timedelta(weeks=52*years))
 
@@ -220,18 +255,18 @@ if __name__ == "__main__":
         raa.append(def_asset)
     if ref_asset not in raa:
         raa.append(ref_asset)
-    # for ticker in raa:
-    #     check_table(ticker)
-    #     retrieve_data(ticker)
-        # print(wma(ticker, local_datetime.date()))
+    for ticker in raa:
+        # check_table(ticker)
+        # retrieve_data(ticker)
+        print(wma(ticker, local_datetime.date()))
 
-    portfolio_yield, mdd, ref_yield, ref_mdd = dual_momentum(
+    portfolio_yield, mdd, yield_stdev, yield_mean, ref_yield, ref_mdd, ref_yield_stdev, ref_yield_mean = dual_momentum(
         canary_asset, portfolio, def_asset, ref_asset, ref_date)
     print("[" + ref_date.strftime("%Y-%m-%d") + " ~ " +
           local_datetime.date().strftime("%Y-%m-%d") + "]")
     print("[Dual Momentum]", portfolio, "CAGR {:.2f}%".format(
-        100*(((1+portfolio_yield/100)/1)**(1/years)-1)), "MDD {:.2f}% yield {:.2f}%".format(mdd, portfolio_yield))
+        100*(((1+portfolio_yield/100)/1)**(1/years)-1)), "MDD {:.2f}% yield {:.2f}% stdev {:.2f}% mean {:.4f}%".format(mdd, portfolio_yield, yield_stdev, yield_mean))
     print("|Reference|", [ref_asset], "CAGR {:.2f}%".format(
-        100*(((1+ref_yield/100)/1)**(1/years)-1)), "MDD {:.2f}% yield {:.2f}%".format(ref_mdd, ref_yield))
+        100*(((1+ref_yield/100)/1)**(1/years)-1)), "MDD {:.2f}% yield {:.2f}% stdev {:.2f}% mean {:.4f}%".format(ref_mdd, ref_yield, ref_yield_stdev, ref_yield_mean))
 
     con.close()
