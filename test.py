@@ -7,11 +7,13 @@ import statistics
 from datetime import datetime, timezone, timedelta
 
 tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW",
+"VTI": "VTI", "IWM":"IWM", "VGK":"VGK", "EWJ": "EWJ", "VWO":"VWO", "GSG":"GSG", "HYG":"HYG", "LQD":"LQD", "UST":"UST", "SHV":"SHV", "USBND": "VBMFX", "GLBBND":"PGBIX", "LTBND":"VUSTX",
            "IVM": "NAESX", "IEF": "VFITX", "SHY": "SHY", "BND": "BND", "AGG": "AGG", "VCIT": "VCIT", "VNQ": "VNQ", "GUNR": "GUNR", "O": "O", "RIO": "RIO", "NAVER": "035420", "SAMSUNG": "005930"}
 database = "test.db"
 
 DEBUG_MODE = False
 FEE_MODE = True
+REBALANCE_PERIOD = 30
 
 
 def check_table(ticker):
@@ -94,7 +96,7 @@ def wma(ticker, ref_date):
         m.append(rows[i*20][1])
     d = rows[0][0]
     weighted_moving_average = 100*(
-        ((m[0]-m[1])*70+(m[0]-m[3])*15+(m[0]-m[6])*10+(m[0]-m[12])*5)/(100*m[0]))
+        ((m[0]-m[1])*60+(m[0]-m[3])*20+(m[0]-m[6])*15+(m[0]-m[12])*5)/(100*m[0]))
     # MOVING AVERAGE 1Y-1M for annual rebalancing
     # ((m[0]-m[12])-(m[0]-m[1]))/m[0])
     wma = '{0:.3g}'.format(weighted_moving_average)
@@ -141,7 +143,7 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             selected.append(key)
             # NUM OF HOLDING ASSETS
             if len(selected) >= len(portfolio)//2:
-                # if len(selected) == len(portfolio):
+            # if len(selected) == len(portfolio):
                 break
         # MONTHLY SEASONALITY NOV-MAY
         # if canary_wma > 0 and len(selected) >= 1 and (end_date.month > 10 or end_date.month < 6):
@@ -153,12 +155,12 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
                 cur.execute("SELECT " + price + " FROM " + ticker +
                             " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
                 start = float(cur.fetchone()[0])
-                end_date += timedelta(days=30)
+                end_date += timedelta(days=REBALANCE_PERIOD)
                 cur.execute("SELECT " + price + " FROM " + ticker +
                             " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
                 end = float(cur.fetchone()[0])
                 price = 'Close'
-                end_date -= timedelta(days=30)
+                end_date -= timedelta(days=REBALANCE_PERIOD)
                 # FEE SELL/BUY 0.2%
                 if FEE_MODE and ticker not in prev_selected:
                     portfolio_yield *= 1 + \
@@ -174,7 +176,7 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             if portfolio_yield-prev_yield < mdd:
                 mdd = portfolio_yield-prev_yield
             prev_yield = portfolio_yield
-            end_date += timedelta(days=30)
+            end_date += timedelta(days=REBALANCE_PERIOD)
         else:
             if DEBUG_MODE:
                 print(wma(def_asset, end_date))
@@ -183,7 +185,7 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             cur.execute("SELECT " + price + " FROM " + def_asset +
                         " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
             start = float(cur.fetchone()[0])
-            end_date += timedelta(days=30)
+            end_date += timedelta(days=REBALANCE_PERIOD)
             cur.execute("SELECT " + price + " FROM " + def_asset +
                         " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
             end = float(cur.fetchone()[0])
@@ -202,13 +204,13 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
                 mdd = portfolio_yield-prev_yield
             prev_yield = portfolio_yield
 
-        end_date -= timedelta(days=30)
+        end_date -= timedelta(days=REBALANCE_PERIOD)
         if ref_asset == 'M2':
             price = 'M2'
         cur.execute("SELECT " + price + " FROM " + ref_asset +
                     " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
         start = float(cur.fetchone()[0])
-        end_date += timedelta(days=30)
+        end_date += timedelta(days=REBALANCE_PERIOD)
         cur.execute("SELECT " + price + " FROM " + ref_asset +
                     " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
         end = float(cur.fetchone()[0])
@@ -240,10 +242,10 @@ if __name__ == "__main__":
 
     # RAA
     canary_asset = "KOSPI"
-    portfolio = ["QQQ", "TLT", "DBC", "GLD"]
-    def_asset = "IEF"
+    portfolio = ["SPY", "IEF", "GLD", "QQQ"]
+    def_asset = "SHV"
     ref_asset = "M2"
-    years = 7.6
+    years = 3
     ref_date = (local_datetime.date()-timedelta(weeks=52*years))
 
     raa = []
@@ -256,15 +258,15 @@ if __name__ == "__main__":
     if ref_asset not in raa:
         raa.append(ref_asset)
     for ticker in raa:
-        # check_table(ticker)
-        # retrieve_data(ticker)
+        check_table(ticker)
+        retrieve_data(ticker)
         print(wma(ticker, local_datetime.date()))
 
     portfolio_yield, mdd, yield_stdev, yield_mean, ref_yield, ref_mdd, ref_yield_stdev, ref_yield_mean = dual_momentum(
         canary_asset, portfolio, def_asset, ref_asset, ref_date)
     print("[" + ref_date.strftime("%Y-%m-%d") + " ~ " +
           local_datetime.date().strftime("%Y-%m-%d") + "]")
-    print("[Dual Momentum]", portfolio, "CAGR {:.2f}%".format(
+    print("[Dual Momentum]", portfolio, "Defence", def_asset,  "CAGR {:.2f}%".format(
         100*(((1+portfolio_yield/100)/1)**(1/years)-1)), "MDD {:.2f}% yield {:.2f}% stdev {:.2f}% mean {:.4f}%".format(mdd, portfolio_yield, yield_stdev, yield_mean))
     print("|Reference|", [ref_asset], "CAGR {:.2f}%".format(
         100*(((1+ref_yield/100)/1)**(1/years)-1)), "MDD {:.2f}% yield {:.2f}% stdev {:.2f}% mean {:.4f}%".format(ref_mdd, ref_yield, ref_yield_stdev, ref_yield_mean))
