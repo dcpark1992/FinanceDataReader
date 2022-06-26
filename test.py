@@ -10,6 +10,7 @@ tickers = {"KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DB
 database = "test.db"
 
 DEBUG_MODE = False
+FEE_MODE = True
 
 
 def check_table(ticker):
@@ -53,7 +54,7 @@ def retrieve_data(ticker):
         data.to_sql(ticker, con, if_exists="append")
         if DEBUG_MODE:
             print(ticker + " last Date = ", lastdate)
-            cur.execute("SELECT Date FROM " + k +
+            cur.execute("SELECT Date FROM " + ticker +
                         " WHERE Date >= date(?,'-0 days') ORDER BY Date DESC LIMIT 3", (lastdate,))
             rows = cur.fetchall()
             for row in rows:
@@ -102,6 +103,7 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
     ref_yield = 100
     prev_yield = portfolio_yield
     prev_ref_yield = ref_yield
+    prev_selected = []
     mdd = 0
     ref_mdd = 0
     while end_date < now:
@@ -119,12 +121,12 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             # if sorted_test_wma[key] > canary_wma:
             selected.append(key)
             # NUM OF HOLDING ASSETS
-            # if len(selected) >= len(portfolio)//2:
-            if len(selected) == len(portfolio):
+            if len(selected) >= len(portfolio)//2:
+            # if len(selected) == len(portfolio):
                 break
         # MONTHLY SEASONALITY NOV-MAY
-        # if canary_wma > 0 and len(selected) >= 1 and (end_date.month > 10 or end_date.month < 6):
-        if canary_wma > 0 and len(selected) >= 1:
+        if canary_wma > 0 and len(selected) >= 1 and (end_date.month > 10 or end_date.month < 6):
+        # if canary_wma > 0 and len(selected) >= 1:
             for ticker in selected:
                 cur.execute("SELECT Close FROM " + ticker +
                             " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
@@ -134,10 +136,15 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
                             " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
                 end = float(cur.fetchone()[0])
                 end_date -= timedelta(days=30)
-                portfolio_yield *= 1+((end-start)/start)/(len(selected)//2+1)
+                # FEE 0.2%
+                if FEE_MODE and ticker not in prev_selected:
+                    portfolio_yield *= 1+((end-start)/start-0.004)/len(selected)
+                else:
+                    portfolio_yield *= 1+((end-start)/start)/len(selected)
             if DEBUG_MODE:
                 print(selected, end_date, "{:.2f}% {:.2f}%".format(
                     portfolio_yield, portfolio_yield-prev_yield))
+            prev_selected = selected
             if portfolio_yield-prev_yield < mdd:
                 mdd = portfolio_yield-prev_yield
             prev_yield = portfolio_yield
@@ -152,10 +159,14 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             cur.execute("SELECT Close FROM " + def_asset +
                         " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 1", (end_date, ))
             end = float(cur.fetchone()[0])
-            portfolio_yield *= (1+(end-start)/start)
+            if FEE_MODE and prev_selected != [def_asset]:
+                portfolio_yield *= 1+(end-start)/start-0.004
+            else:
+                portfolio_yield *= 1+(end-start)/start
             if DEBUG_MODE:
                 print([def_asset], end_date, start, end, "{:.2f}% {:.2f}% {:.2f}%".format(
                     100*(end-start)/start, portfolio_yield, portfolio_yield-prev_yield))
+            prev_selected = [def_asset]
             if portfolio_yield-prev_yield < mdd:
                 mdd = portfolio_yield-prev_yield
             prev_yield = portfolio_yield
@@ -194,10 +205,10 @@ if __name__ == "__main__":
 
     # RAA
     canary_asset = "KOSPI"
-    portfolio = ["QQQ", "NAVER"]
-    def_asset = "IEF"
+    portfolio = ["QQQ", "TLT", "DBC", "NAVER"]
+    def_asset = "TLT"
     ref_asset = "SPY"
-    years = 7
+    years = 7.6
     ref_date = (local_datetime.date()-timedelta(weeks=52*years))
 
     raa = []
@@ -209,10 +220,10 @@ if __name__ == "__main__":
         raa.append(def_asset)
     if ref_asset not in raa:
         raa.append(ref_asset)
-    for ticker in raa:
-        check_table(ticker)
-        retrieve_data(ticker)
-        print(wma(ticker, local_datetime.date()))
+    # for ticker in raa:
+    #     check_table(ticker)
+    #     retrieve_data(ticker)
+        # print(wma(ticker, local_datetime.date()))
 
     portfolio_yield, mdd, ref_yield, ref_mdd = dual_momentum(
         canary_asset, portfolio, def_asset, ref_asset, ref_date)
