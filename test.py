@@ -6,10 +6,10 @@ import statistics
 
 from datetime import datetime, timezone, timedelta
 
-tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW", "TIP":"TIP", "IAU":"IAU", "MCHI":"MCHI", "XLF":"XLF",
+tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW", "ETH":"ETH/KRW", "TIP":"TIP", "IAU":"IAU", "MCHI":"MCHI", "XLF":"XLF",
 "VTI": "VTI", "IWM":"IWM", "VGK":"VGK", "EWJ": "EWJ", "VWO":"VWO", "GSG":"GSG", "HYG":"HYG", "LQD":"LQD", "UST":"UST", "SHV":"SHV", "USBND": "VBMFX", "GLBBND":"PGBIX", "LTBND":"VUSTX", "PSQ":"PSQ",
-"USDKRW": "USD/KRW", "ASHR": "ASHR", "DBA": "DBA", "SCHD": "SCHD", "TSLA": "TSLA", "XOM": "XOM",
-           "IVM": "NAESX", "IEF": "VFITX", "SHY": "SHY", "BND": "BND", "AGG": "AGG", "VCIT": "VCIT", "VNQ": "VNQ", "GUNR": "GUNR", "O": "O", "RIO": "RIO", "NAVER": "035420", "SAMSUNG": "005930"}
+"USDKRW": "USD/KRW", "ASHR": "ASHR", "DBA": "DBA", "SCHD": "SCHD", "TSLA": "TSLA", "XOM": "XOM", "QLTA": "QLTA", "NIFTY": "INDY",
+           "EEM":"EEM", "TQQQ":"TQQQ", "SOXL":"SOXL", "UCO":"UCO", "IVM": "NAESX", "IEF": "VFITX", "SHY": "SHY", "BND": "BND", "AGG": "AGG", "VCIT": "VCIT", "VNQ": "VNQ", "GUNR": "GUNR", "O": "O", "RIO": "RIO", "NAVER": "035420", "SAMSUNG": "005930"}
 database = "test.db"
 
 DEBUG_MODE = False
@@ -242,9 +242,9 @@ if __name__ == "__main__":
             "%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
 
     # RAA
-    canary_asset = "KOSPI"
-    portfolio = ["QQQ", "SPY", "TLT", "IEF", "IAU", "GUNR", "DBA", "USDKRW", "BTC", "SCHD", "ASHR", "PSQ", "XOM"]
-    def_asset = "SHV"
+    canary_asset = "AGG"
+    portfolio = ["QQQ", "EEM", "IWM", "TLT", "TQQQ", "SOXL", "UCO", "USDKRW", "IAU", "GUNR", "BTC", "ETH"]
+    def_asset = "IEF"
     ref_asset = "M2"
     years = 3
     ref_date = (local_datetime.date()-timedelta(weeks=52*years))
