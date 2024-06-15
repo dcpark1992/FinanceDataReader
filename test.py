@@ -6,15 +6,15 @@ import statistics
 
 from datetime import datetime, timezone, timedelta
 
-tickers = {"M2": "M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW", "ETH":"ETH/KRW", "TIP":"TIP", "IAU":"IAU", "MCHI":"MCHI", "XLF":"XLF",
+tickers = {"M2": "FRED:M2", "US1YT": "US1YT=X", "KOSPI": "KS11", "SPY": "SPY", "TLT": "TLT", "GLD": "GLD", "DBC": "DBC", "QQQ": "QQQ", "BTC": "BTC/KRW", "ETH":"ETH/KRW", "TIP":"TIP", "IAU":"IAU", "MCHI":"MCHI", "XLF":"XLF",
 "VTI": "VTI", "IWM":"IWM", "VGK":"VGK", "EWJ": "EWJ", "VWO":"VWO", "GSG":"GSG", "HYG":"HYG", "LQD":"LQD", "UST":"UST", "SHV":"SHV", "USBND": "VBMFX", "GLBBND":"PGBIX", "LTBND":"VUSTX", "PSQ":"PSQ",
-"USDKRW": "USD/KRW", "ASHR": "ASHR", "DBA": "DBA", "SCHD": "SCHD", "TSLA": "TSLA", "XOM": "XOM", "QLTA": "QLTA", "NIFTY": "INDY",
+"USDKRW": "USD/KRW", "ASHR": "ASHR", "DBA": "DBA", "SCHD": "SCHD", "TSLA": "TSLA", "XOM": "XOM", "QLTA": "QLTA", "NIFTY": "INDY", "SOXX": "SOXX", "USO": "USO",
            "EEM":"EEM", "TQQQ":"TQQQ", "SOXL":"SOXL", "UCO":"UCO", "IVM": "NAESX", "IEF": "VFITX", "SHY": "SHY", "BND": "BND", "AGG": "AGG", "VCIT": "VCIT", "VNQ": "VNQ", "GUNR": "GUNR", "O": "O", "RIO": "RIO", "NAVER": "035420", "SAMSUNG": "005930"}
 database = "test.db"
 
 DEBUG_MODE = False
 FEE_MODE = True
-REBALANCE_PERIOD = 30
+REBALANCE_PERIOD = 7
 
 
 def check_table(ticker):
@@ -32,16 +32,19 @@ def check_table(ticker):
         if DEBUG_MODE:
             print(ticker + " table not exists")
         if ticker == 'M2':
-            data = fdr.DataReader('M2', data_source='fred')
+            data = fdr.DataReader('FRED:M2')
         else:
             data = fdr.DataReader(tickers[ticker])
+            print('check_table', ticker, len(data))
         data.to_sql(ticker, con, if_exists="replace")
 
 
 def retrieve_data(ticker):
     cur.execute("SELECT Date FROM " + ticker + " ORDER BY Date DESC LIMIT 1")
+    # cur.execute("SELECT Date FROM " + ticker + " ORDER BY Date ASC LIMIT 1")
     row = cur.fetchone()
     if row == None:
+        print(ticker, 'row == None')
         if DEBUG_MODE:
             print(ticker + " table rows not exists")
         if ticker == 'M2':
@@ -54,8 +57,8 @@ def retrieve_data(ticker):
         row = cur.fetchone()
     lastdate = datetime.strptime(row[0].split(" ")[0], "%Y-%m-%d").date()
 
-    # if(lastdate < utc_datetime.date()-timedelta(days=0)):
-    if(lastdate <= local_datetime.date()):
+    if(lastdate < utc_datetime.date()-timedelta(days=0)):
+    # if(lastdate <= local_datetime.date()):
         cur.execute("DELETE FROM " + ticker +
                     " WHERE Date >= date(?,'-0 days') ORDER BY Date DESC LIMIT 3", (lastdate,))
         con.commit()
@@ -89,8 +92,8 @@ def wma(ticker, ref_date):
     cur.execute("SELECT Date, " + price + " FROM " + ticker +
                 " WHERE Date <= date(?,'-0 days') ORDER BY Date DESC LIMIT 241", (ref_date, ))
     rows = cur.fetchall()
-    if DEBUG_MODE:
-        print(ticker, len(rows))
+    # if DEBUG_MODE:
+    #     print(ticker, len(rows))
     m = []
     m.append(rows[0][1])
     for i in range(1, 13):
@@ -129,12 +132,12 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
     ref_mdd = 0
     price = 'Close'
     while end_date < now:
+        if DEBUG_MODE:
+            print('__________________________________________________')
         canary_wma = float(wma(canary_asset, end_date)[1])
         selected = []
         test_wma = {}
         for ticker in portfolio:
-            if DEBUG_MODE:
-                print(wma(ticker, end_date))
             test_wma[ticker] = float(wma(ticker, end_date)[1])
         sorted_test_wma = dict(
             sorted(test_wma.items(), key=lambda x: x[1], reverse=True))
@@ -143,7 +146,8 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
             # if sorted_test_wma[key] > canary_wma:
             selected.append(key)
             # NUM OF HOLDING ASSETS
-            if len(selected) >= len(portfolio)//2:
+            if len(selected) == 1:
+            # if len(selected) >= len(portfolio)//2:
             # if len(selected) == len(portfolio):
                 break
         # MONTHLY SEASONALITY NOV-MAY
@@ -171,8 +175,8 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
                     portfolio_yield *= 1+((end-start)/start)/len(selected)
                     yields[-1] += 100*((end-start)/start)/len(selected)
             if DEBUG_MODE:
-                print(selected, end_date, "{:.2f}% {:.2f}%".format(
-                    portfolio_yield, portfolio_yield-prev_yield))
+                print('[Selected]', selected, end_date, start, end, "{:.2f}% {:.2f}% {:.2f}%".format(
+                    100*(end-start)/start, portfolio_yield, portfolio_yield-prev_yield))
             prev_selected = selected
             if portfolio_yield-prev_yield < mdd:
                 mdd = portfolio_yield-prev_yield
@@ -217,13 +221,15 @@ def dual_momentum(canary_asset, portfolio, def_asset, ref_asset, ref_date):
         end = float(cur.fetchone()[0])
         price = 'Close'
         ref_yield *= (1+(end-start)/start)
-        ref_yields.append(100*(1+(end-start)/start))
+        ref_yields.append(100*((end-start)/start))
         if DEBUG_MODE:
-            print([ref_asset], end_date, start, end, "{:.2f}% {:.2f}% {:.2f}%".format(
+            print('[Reference]', [ref_asset], end_date, start, end, "{:.2f}% {:.2f}% {:.2f}%".format(
                 100*(end-start)/start, ref_yield, ref_yield-prev_ref_yield))
         if ref_yield-prev_ref_yield < ref_mdd:
             ref_mdd = ref_yield-prev_ref_yield
         prev_ref_yield = ref_yield
+        if DEBUG_MODE:
+            print('---------------------------------------------------')
 
     return portfolio_yield, mdd, statistics.stdev(yields), statistics.mean(yields), ref_yield, ref_mdd, statistics.stdev(ref_yields), statistics.mean(ref_yields)
 
@@ -242,11 +248,11 @@ if __name__ == "__main__":
             "%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
 
     # RAA
-    canary_asset = "AGG"
-    portfolio = ["QQQ", "EEM", "IWM", "TLT", "TQQQ", "SOXL", "UCO", "USDKRW", "IAU", "GUNR", "BTC", "ETH"]
+    canary_asset = "SOXX"
+    portfolio = ["QQQ", "TLT", "USO"]
     def_asset = "IEF"
-    ref_asset = "M2"
-    years = 3
+    ref_asset = "QQQ"
+    years = 1
     ref_date = (local_datetime.date()-timedelta(weeks=52*years))
 
     raa = []
@@ -267,7 +273,7 @@ if __name__ == "__main__":
         canary_asset, portfolio, def_asset, ref_asset, ref_date)
     print("[" + ref_date.strftime("%Y-%m-%d") + " ~ " +
           local_datetime.date().strftime("%Y-%m-%d") + "]")
-    print("[Dual Momentum]", portfolio, "Defence", def_asset,  "CAGR {:.2f}%".format(
+    print("[Dual Momentum]", portfolio, "Canary", canary_asset, "Defence", def_asset,  "CAGR {:.2f}%".format(
         100*(((1+portfolio_yield/100)/1)**(1/years)-1)), "MDD {:.2f}% yield {:.2f}% stdev {:.2f}% mean {:.4f}%".format(mdd, portfolio_yield, yield_stdev, yield_mean))
     print("|Reference|", [ref_asset], "CAGR {:.2f}%".format(
         100*(((1+ref_yield/100)/1)**(1/years)-1)), "MDD {:.2f}% yield {:.2f}% stdev {:.2f}% mean {:.4f}%".format(ref_mdd, ref_yield, ref_yield_stdev, ref_yield_mean))

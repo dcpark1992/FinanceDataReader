@@ -1,0 +1,4 @@
+finance-datareader
+pysqlite3
+pandas
+openpyxl
